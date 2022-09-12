@@ -5,12 +5,13 @@ use serde::{
 };
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Payload {
+struct Claims {
     access_key: String,
     nonce: String,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>>{
     let conf = ini::ini!("./key.ini");
     let upbit = conf.get("upbit").expect("Not in upbit section");
 
@@ -27,15 +28,26 @@ fn main() {
             .unwrap()
             .as_str();
 
-    println!("access-key: {}", access_key);
-    println!("secret-key: {}", secret_key);
-    println!("{}", uuid::Uuid::new_v4());
-
-    let payload = Payload {
+    let claims = Claims {
         access_key: access_key.to_string(),
         nonce: uuid::Uuid::new_v4().to_string(),
     };
 
-    println!("{:?}", payload);
+    let token = jwt::encode(
+        &jwt::Header::default(),
+        &claims,
+        &jwt::EncodingKey::from_secret(secret_key.as_ref())
+    ).unwrap();
 
+    let client = reqwest::Client::new();
+    let res = client.get("https://api.upbit.com/v1/accounts")
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await?
+            .text()
+            .await;
+
+    println!("{}", res.unwrap());
+
+    Ok(())
 }
